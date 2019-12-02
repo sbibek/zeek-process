@@ -57,7 +57,7 @@ event zeek_done(){
 		total_goodput += goodput_track[i];
 	}
 	
-
+	print "Total pairs found ", |rtt_track|;
 	print "AVG RTT (ms) ", total_rtt*1000/|rtt_track|;
 	print "AVG GOODPUT (bits/s) ", total_goodput/|goodput_track|;
 }
