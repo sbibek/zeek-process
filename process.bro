@@ -9,9 +9,12 @@ global goodput_track: vector of double = vector();
 
 event tcp_packet(c:connection, is_orig: bool, flags:string, seq:count, ack:count, len:count, payload: string){
 	# in case of cnc-bot analysis, the bot initiates connection but the packet is sent from cnc, so the is_orig should be false
-	if(flags == "AP" && is_orig == F){
+	# IMP NOTE: Found out that is_orig flag can change according to if the initial handshake packets were captured or not. So using T/F
+	# depends on the capture and hence use accordingly.
+#	print is_orig, c$id$orig_h, flags;
+	if(flags == "AP" && is_orig == T){
 	#	print is_orig, c$id, flags, seq, ack, len;
-
+	#	print c$id$orig_h, c$id$orig_p, is_orig;
 		if(c$id$orig_h !in pairtrack){
 			pairtrack[c$id$orig_h] = table();
 			pairtrack_bytes[c$id$orig_h] = table();
@@ -33,14 +36,19 @@ event tcp_packet(c:connection, is_orig: bool, flags:string, seq:count, ack:count
 		pairtrack[c$id$orig_h][c$id$orig_p][next_ack][0] = network_time();
 		pairtrack_bytes[c$id$orig_h][c$id$orig_p][next_ack][0] = len;
 
-	} else if (flags == "A" && is_orig == T) {
+	} else if (is_orig == F) {
 		# the response ack is sent from the bot so we track is_orig == T
+		# IMP NOTE: Found out that is_orig flag can change according to if the initial handshake packets were captured or not. So using T/F
+		# depends on the capture and hence use accordingly.
+
 		# now this should match to one of the above mentioned table
 		if(c$id$orig_h in pairtrack && c$id$orig_p in pairtrack[c$id$orig_h] && ack in pairtrack[c$id$orig_h][c$id$orig_p]){
 			pairtrack[c$id$orig_h][c$id$orig_p][ack][1] = network_time();
 			local rtt:double = interval_to_double( pairtrack[c$id$orig_h][c$id$orig_p][ack][1]-pairtrack[c$id$orig_h][c$id$orig_p][ack][0]);			
 			rtt_track[|rtt_track|] = rtt;
-			goodput_track[|goodput_track|] = (pairtrack_bytes[c$id$orig_h][c$id$orig_p][ack][0]*8)/rtt;  			
+			if(rtt > 0){
+				goodput_track[|goodput_track|] = (pairtrack_bytes[c$id$orig_h][c$id$orig_p][ack][0]*8)/rtt;  			
+			}
 		}
 	}
 }
@@ -48,10 +56,11 @@ event tcp_packet(c:connection, is_orig: bool, flags:string, seq:count, ack:count
 event zeek_done(){
 	local total_rtt: double = 0.0;
 	local total_goodput:double = 0.0; 
-	
+
 	for(i in rtt_track){
 		total_rtt += rtt_track[i];
 	}
+	
 
 	for(i in goodput_track){
 		total_goodput += goodput_track[i];
